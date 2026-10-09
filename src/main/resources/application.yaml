@@ -1,0 +1,63 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: ms-api-gateway
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+
+      routes:
+        - id: user-identity-route
+          uri: http://${USER_IDENTITY_HOST:127.0.0.1}:8080
+          predicates:
+            - Path=/api/v1/auth/**, /api/v1/users/**
+
+        - id: fleets-drivers-route
+          uri: http://${FLEETS_DRIVERS_HOST:127.0.0.1}:8081
+          predicates:
+            - Path=/api/v1/fleets/**, /api/v1/drivers/**
+
+        - id: community-alerts-route
+          uri: http://${COMMUNITY_ALERTS_HOST:127.0.0.1}:8082
+          predicates:
+            - Path=/api/v1/alerts/**
+
+        - id: load-allocation-route
+          uri: http://${LOAD_ALLOCATION_HOST:127.0.0.1}:8083
+          predicates:
+            - Path=/api/v1/loads/**
+
+        - id: routing-restrictions-route
+          uri: http://${ROUTING_RESTRICTIONS_HOST:127.0.0.1}:8084
+          predicates:
+            - Path=/api/v1/restrictions/**
+
+        - id: ai-fleet-allocation-route
+          uri: http://${AI_FLEET_ALLOCATION_HOST:127.0.0.1}:8085
+          predicates:
+            - Path=/api/v1/fleet-allocations/**
+
+        - id: route-ai-agent-route
+          uri: http://${ROUTE_AI_AGENT_HOST:127.0.0.1}:8086
+          predicates:
+            - Path=/api/v1/routes/**
+
+        - id: notifications-route
+          uri: http://${NOTIFICATIONS_HOST:127.0.0.1}:8087
+          predicates:
+            - Path=/api/v1/notifications/**
+
+app:
+  jwt:
+    secret: TruckDarSecretKeySecurityAuthenticationToken2026MasterKey!
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
