@@ -29,8 +29,7 @@ spring:
         - id: fleets-drivers-route
           uri: http://localhost:8081
           predicates:
-            - Path=/api/v1/fleets/**, /api/v1/drivers/**
-
+          - Path=/api/v1/fleets-drivers/**, /api/v1/fleets/**, /api/v1/drivers/**
         - id: community-alerts-route
           uri: http://localhost:8082
           predicates:
@@ -49,7 +48,7 @@ spring:
         - id: ai-fleet-allocation-route
           uri: http://localhost:8085
           predicates:
-            - Path=/api/v1/fleet-allocations/**
+           - Path=/api/v1/fleet-allocation/**, /api/v1/fleet-allocations/**
 
         - id: route-ai-agent-route
           uri: http://localhost:8086
