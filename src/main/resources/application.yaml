@@ -7,6 +7,11 @@ spring:
 
   cloud:
     gateway:
+      # El gateway es el único responsable de CORS: no se reenvía Origin a los servicios
+      # (varios declaran @CrossOrigin("*")) y se depuran cabeceras CORS duplicadas en la respuesta.
+      default-filters:
+        - RemoveRequestHeader=Origin
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
       routes:
         - id: user-identity-route
           uri: ${TRUCKDAR_USER_IDENTITY_URL:http://localhost:8080}
@@ -53,7 +58,9 @@ app:
 
 gateway:
   cors:
-    allowed-origins: ${TRUCKDAR_CORS_ALLOWED_ORIGINS:http://localhost:3000}
+    # Patrones de origen: en local cualquier puerto de localhost/127.0.0.1 (Live Server, nginx :5500, etc.).
+    # En producción definir TRUCKDAR_CORS_ALLOWED_ORIGINS con el dominio real del frontend.
+    allowed-origins: ${TRUCKDAR_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
 
 management:
   endpoints:
