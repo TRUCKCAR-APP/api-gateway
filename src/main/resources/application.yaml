@@ -7,62 +7,53 @@ spring:
 
   cloud:
     gateway:
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: "*"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - PATCH
-              - OPTIONS
-            allowedHeaders: "*"
-
       routes:
         - id: user-identity-route
-          uri: http://localhost:8080
+          uri: ${TRUCKDAR_USER_IDENTITY_URL:http://localhost:8080}
           predicates:
             - Path=/api/v1/auth/**, /api/v1/users/**
 
         - id: fleets-drivers-route
-          uri: http://localhost:8081
+          uri: ${TRUCKDAR_FLEETS_DRIVERS_URL:http://localhost:8081}
           predicates:
           - Path=/api/v1/fleets-drivers/**, /api/v1/fleets/**, /api/v1/drivers/**
         - id: community-alerts-route
-          uri: http://localhost:8082
+          uri: ${TRUCKDAR_COMMUNITY_ALERTS_URL:http://localhost:8082}
           predicates:
             - Path=/api/v1/alerts/**
 
         - id: load-allocation-route
-          uri: http://localhost:8083
+          uri: ${TRUCKDAR_LOAD_ALLOCATION_URL:http://localhost:8083}
           predicates:
             - Path=/api/v1/loads/**
 
         - id: routing-restrictions-route
-          uri: http://localhost:8084
+          uri: ${TRUCKDAR_ROUTING_RESTRICTIONS_URL:http://localhost:8084}
           predicates:
             - Path=/api/v1/restrictions/**
 
         - id: ai-fleet-allocation-route
-          uri: http://localhost:8085
+          uri: ${TRUCKDAR_AI_FLEET_ALLOCATION_URL:http://localhost:8085}
           predicates:
            - Path=/api/v1/fleet-allocation/**, /api/v1/fleet-allocations/**
 
         - id: route-ai-agent-route
-          uri: http://localhost:8086
+          uri: ${TRUCKDAR_ROUTE_AI_AGENT_URL:http://localhost:8086}
           predicates:
             - Path=/api/v1/routes/**
 
         - id: notifications-route
-          uri: http://localhost:8087
+          uri: ${TRUCKDAR_NOTIFICATIONS_URL:http://localhost:8087}
           predicates:
             - Path=/api/v1/notifications/**
 
 app:
   jwt:
-    secret: TruckDarSecretKeySecurityAuthenticationToken2026MasterKey!
+    secret: ${TRUCKDAR_JWT_SECRET}
+
+gateway:
+  cors:
+    allowed-origins: ${TRUCKDAR_CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
 management:
   endpoints:

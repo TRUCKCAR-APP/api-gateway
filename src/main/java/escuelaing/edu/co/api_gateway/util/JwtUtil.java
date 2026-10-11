@@ -14,7 +14,7 @@ public class JwtUtil {
 
     private final SecretKey key;
 
-    public JwtUtil(@Value("${app.jwt.secret:TruckDarSecretKeySecurityAuthenticationToken2026MasterKey!}") String secret) {
+    public JwtUtil(@Value("${app.jwt.secret}") String secret) {
         this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
     }
 
