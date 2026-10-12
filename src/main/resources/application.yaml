@@ -8,49 +8,73 @@ spring:
   cloud:
     gateway:
       # El gateway es el único responsable de CORS: no se reenvía Origin a los servicios
-      # (varios declaran @CrossOrigin("*")) y se depuran cabeceras CORS duplicadas en la respuesta.
+      # (varios declaran @CrossOrigin("*")). Las cabeceras CORS duplicadas de la respuesta se depuran en cada ruta
+      # HTTP (filtro DedupeResponseHeader): en la ruta WebSocket la respuesta del upgrade es de solo lectura.
       default-filters:
         - RemoveRequestHeader=Origin
-        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
       routes:
         - id: user-identity-route
           uri: ${TRUCKDAR_USER_IDENTITY_URL:http://localhost:8080}
           predicates:
             - Path=/api/v1/auth/**, /api/v1/users/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
         - id: fleets-drivers-route
           uri: ${TRUCKDAR_FLEETS_DRIVERS_URL:http://localhost:8081}
           predicates:
           - Path=/api/v1/fleets-drivers/**, /api/v1/fleets/**, /api/v1/drivers/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
+
+        # Telemetría GPS: el handshake WebSocket (STOMP) se reenvía a fleets-drivers. Con Upgrade: websocket el
+        # gateway cambia http:// por ws:// automáticamente. El JWT llega como ?access_token= y se quita al validar.
+        - id: fleets-drivers-telemetry-ws
+          uri: ${TRUCKDAR_FLEETS_DRIVERS_URL:http://localhost:8081}
+          predicates:
+            - Path=/ws-telemetry, /ws-telemetry/**
+
         - id: community-alerts-route
           uri: ${TRUCKDAR_COMMUNITY_ALERTS_URL:http://localhost:8082}
           predicates:
             - Path=/api/v1/alerts/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
         - id: load-allocation-route
           uri: ${TRUCKDAR_LOAD_ALLOCATION_URL:http://localhost:8083}
           predicates:
             - Path=/api/v1/loads/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
         - id: routing-restrictions-route
           uri: ${TRUCKDAR_ROUTING_RESTRICTIONS_URL:http://localhost:8084}
           predicates:
             - Path=/api/v1/restrictions/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
         - id: ai-fleet-allocation-route
           uri: ${TRUCKDAR_AI_FLEET_ALLOCATION_URL:http://localhost:8085}
           predicates:
            - Path=/api/v1/fleet-allocation/**, /api/v1/fleet-allocations/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
         - id: route-ai-agent-route
           uri: ${TRUCKDAR_ROUTE_AI_AGENT_URL:http://localhost:8086}
           predicates:
             - Path=/api/v1/routes/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
         - id: notifications-route
           uri: ${TRUCKDAR_NOTIFICATIONS_URL:http://localhost:8087}
           predicates:
             - Path=/api/v1/notifications/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
 app:
   jwt:

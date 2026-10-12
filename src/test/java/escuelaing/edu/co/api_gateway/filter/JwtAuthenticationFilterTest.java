@@ -161,4 +161,52 @@ class JwtAuthenticationFilterTest {
 
         filter.filter(exchange, chain).block();
     }
+
+    private String tokenFor(String subject, String role) {
+        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_SECRET));
+        return Jwts.builder()
+                .subject(subject)
+                .claim("role", role)
+                .expiration(new Date(System.currentTimeMillis() + 60_000))
+                .signWith(key)
+                .compact();
+    }
+
+    @Test
+    void telemetryHandshakeAcceptsQueryTokenAndStripsItBeforeForwarding() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/ws-telemetry?access_token=" + tokenFor("driver-1", "CONDUCTOR") + "&v=1")
+                        .header("Upgrade", "websocket")
+                        .header("X-Auth-User", "intruso")
+                        .build());
+        GatewayFilterChain chain = forwardedExchange -> {
+            var forwarded = forwardedExchange.getRequest();
+            assertThat(forwarded.getHeaders().get("X-Auth-User")).containsExactly("driver-1");
+            assertThat(forwarded.getHeaders().get("X-Auth-Role")).containsExactly("CONDUCTOR");
+            assertThat(forwarded.getURI().getQuery()).isEqualTo("v=1");
+            assertThat(forwarded.getQueryParams()).doesNotContainKey("access_token");
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+    }
+
+    @Test
+    void queryTokenIsIgnoredOutsideTheTelemetrySocket() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/loads?access_token=" + tokenFor("coord-1", "COORDINADOR")).build());
+
+        filter.filter(exchange, forwardedExchange -> Mono.error(new AssertionError("no debe reenviarse"))).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void telemetryHandshakeWithoutOrWithInvalidTokenIsRejected() {
+        for (String uri : new String[]{"/ws-telemetry", "/ws-telemetry?access_token=no-es-un-jwt"}) {
+            MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get(uri).build());
+            filter.filter(exchange, forwardedExchange -> Mono.error(new AssertionError("no debe reenviarse"))).block();
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.UNAUTHORIZED);
+        }
+    }
 }

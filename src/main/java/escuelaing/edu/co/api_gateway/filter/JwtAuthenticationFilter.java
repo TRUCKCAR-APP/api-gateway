@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -17,6 +18,10 @@ import java.util.UUID;
 
 @Component
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
+
+    /** Telemetría GPS en tiempo real (STOMP sobre WebSocket hacia fleets-drivers). */
+    private static final String WS_TELEMETRY_PATH = "/ws-telemetry";
+    private static final String ACCESS_TOKEN_PARAM = "access_token";
 
     private final JwtUtil jwtUtil;
 
@@ -46,27 +51,23 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return forwardWithCorrelationId(exchange, chain, correlationId);
         }
 
-        HttpHeaders headers = request.getHeaders();
-        if (!headers.containsKey(HttpHeaders.AUTHORIZATION)) {
-            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-            return exchange.getResponse().setComplete();
-        }
-
-        String authHeader = headers.getFirst(HttpHeaders.AUTHORIZATION);
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-            return exchange.getResponse().setComplete();
-        }
-
-        String token = authHeader.substring(7);
-
-        if (!jwtUtil.isTokenValid(token)) {
+        boolean telemetrySocket = path.equals(WS_TELEMETRY_PATH) || path.startsWith(WS_TELEMETRY_PATH + "/");
+        String token = extractToken(request, telemetrySocket);
+        if (token == null || !jwtUtil.isTokenValid(token)) {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
 
         Claims claims = jwtUtil.getClaims(token);
-        ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+        ServerHttpRequest.Builder requestBuilder = exchange.getRequest().mutate();
+        if (telemetrySocket) {
+            // El token no viaja al servicio: se quita de la URL tras validarlo.
+            requestBuilder.uri(UriComponentsBuilder.fromUri(request.getURI())
+                    .replaceQueryParam(ACCESS_TOKEN_PARAM)
+                    .build(true)
+                    .toUri());
+        }
+        ServerHttpRequest mutatedRequest = requestBuilder
                 .headers(requestHeaders -> {
                     requestHeaders.remove("X-Auth-User");
                     requestHeaders.remove("X-Auth-Role");
@@ -79,6 +80,22 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         exchange.getResponse().getHeaders().set("X-Correlation-Id", correlationId);
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
+    }
+
+    /**
+     * JWT de la cabecera Authorization. En el handshake de /ws-telemetry también se acepta ?access_token=..., porque
+     * la API WebSocket del navegador no permite enviar cabeceras; en cualquier otra ruta el token en la URL se ignora.
+     */
+    private String extractToken(ServerHttpRequest request, boolean telemetrySocket) {
+        String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        if (telemetrySocket) {
+            String queryToken = request.getQueryParams().getFirst(ACCESS_TOKEN_PARAM);
+            return queryToken == null || queryToken.isBlank() ? null : queryToken;
+        }
+        return null;
     }
 
     /** Rol emitido por User-Identity (CONDUCTOR, COORDINADOR, GENERADOR, ADMIN); vacío si el token no lo trae. */
