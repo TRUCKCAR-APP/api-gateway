@@ -81,7 +81,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
     }
 
-    /** Rol emitido por User-Identity (CONDUCTOR, COORDINADOR, ADMIN); vacío si el token no lo trae. */
+    /** Rol emitido por User-Identity (CONDUCTOR, COORDINADOR, GENERADOR, ADMIN); vacío si el token no lo trae. */
     private String roleOf(Claims claims) {
         Object role = claims.get("role");
         return role == null ? "" : role.toString();

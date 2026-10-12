@@ -136,4 +136,29 @@ class JwtAuthenticationFilterTest {
 
         filter.filter(exchange, chain).block();
     }
+
+    @Test
+    void propagatesGeneradorRoleAndDropsSpoofedControlTowerRole() {
+        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_SECRET));
+        String token = Jwts.builder()
+                .subject("generator-1")
+                .claim("role", "GENERADOR")
+                .expiration(new Date(System.currentTimeMillis() + 60_000))
+                .signWith(key)
+                .compact();
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/loads")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Auth-Role", "COORDINADOR")
+                        .header("X-Auth-User", "otro-usuario")
+                        .build());
+        GatewayFilterChain chain = forwardedExchange -> {
+            assertThat(forwardedExchange.getRequest().getHeaders().get("X-Auth-Role")).containsExactly("GENERADOR");
+            assertThat(forwardedExchange.getRequest().getHeaders().get("X-Auth-User")).containsExactly("generator-1");
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+    }
 }
