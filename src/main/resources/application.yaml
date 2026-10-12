@@ -54,7 +54,7 @@ spring:
 
 app:
   jwt:
-    secret: ${TRUCKDAR_JWT_SECRET}
+    secret: ${TRUCKDAR_JWT_SECRET:${JWT_SECRET:}}
 
 gateway:
   cors:

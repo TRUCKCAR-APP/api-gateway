@@ -96,4 +96,44 @@ class JwtAuthenticationFilterTest {
         assertThat(exchange.getResponse().getHeaders().getFirst("X-Correlation-Id"))
                 .isEqualTo("correlation-456");
     }
+
+    @Test
+    void propagatesRoleFromTokenAndDropsSpoofedRoleHeader() {
+        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_SECRET));
+        String token = Jwts.builder()
+                .subject("driver-1")
+                .claim("role", "CONDUCTOR")
+                .expiration(new Date(System.currentTimeMillis() + 60_000))
+                .signWith(key)
+                .compact();
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.patch("/api/v1/loads/1/cancel")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Auth-Role", "ADMIN")
+                        .build());
+        GatewayFilterChain chain = forwardedExchange -> {
+            assertThat(forwardedExchange.getRequest().getHeaders().get("X-Auth-Role"))
+                    .containsExactly("CONDUCTOR");
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+    }
+
+    @Test
+    void publicEndpointsNeverForwardClientSuppliedIdentityHeaders() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/api/v1/auth/login")
+                        .header("X-Auth-User", "spoofed")
+                        .header("X-Auth-Role", "ADMIN")
+                        .build());
+        GatewayFilterChain chain = forwardedExchange -> {
+            assertThat(forwardedExchange.getRequest().getHeaders().containsKey("X-Auth-User")).isFalse();
+            assertThat(forwardedExchange.getRequest().getHeaders().containsKey("X-Auth-Role")).isFalse();
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+    }
 }

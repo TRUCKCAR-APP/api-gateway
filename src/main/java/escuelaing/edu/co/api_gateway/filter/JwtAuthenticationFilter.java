@@ -69,14 +69,22 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
                 .headers(requestHeaders -> {
                     requestHeaders.remove("X-Auth-User");
+                    requestHeaders.remove("X-Auth-Role");
                     requestHeaders.remove("X-Correlation-Id");
                 })
                 .header("X-Auth-User", claims.getSubject())
+                .header("X-Auth-Role", roleOf(claims))
                 .header("X-Correlation-Id", correlationId)
                 .build();
 
         exchange.getResponse().getHeaders().set("X-Correlation-Id", correlationId);
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
+    }
+
+    /** Rol emitido por User-Identity (CONDUCTOR, COORDINADOR, ADMIN); vacío si el token no lo trae. */
+    private String roleOf(Claims claims) {
+        Object role = claims.get("role");
+        return role == null ? "" : role.toString();
     }
 
     private Mono<Void> forwardWithCorrelationId(
@@ -87,6 +95,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 .headers(headers -> {
                     headers.remove("X-Correlation-Id");
                     headers.remove("X-Auth-User");
+                    headers.remove("X-Auth-Role");
                 })
                 .header("X-Correlation-Id", correlationId)
                 .build();
