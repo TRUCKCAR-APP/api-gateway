@@ -15,7 +15,7 @@
 	<artifactId>api-gateway</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>api-gateway</name>
-	<description>TruckDar - API Gateway Routing &amp; Security Layer</description>
+	<description>TruckCar - API Gateway Routing &amp; Security Layer</description>
 
 	<properties>
 		<java.version>21</java.version>

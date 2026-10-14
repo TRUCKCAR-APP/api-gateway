@@ -19,7 +19,7 @@ public class JwtUtil {
             this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
         } catch (RuntimeException e) {
             throw new IllegalStateException(
-                    "TRUCKDAR_JWT_SECRET debe ser un valor Base64 de al menos 256 bits, igual al de User-Identity", e);
+                    "TRUCKCAR_JWT_SECRET debe ser un valor Base64 de al menos 256 bits, igual al de User-Identity", e);
         }
     }
 
