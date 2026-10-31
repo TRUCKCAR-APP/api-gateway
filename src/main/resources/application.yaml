@@ -29,6 +29,8 @@ spring:
 
         # Telemetría GPS: el handshake WebSocket (STOMP) se reenvía a fleets-drivers. Con Upgrade: websocket el
         # gateway cambia http:// por ws:// automáticamente. El JWT llega como ?access_token= y se quita al validar.
+        # En Docker la URL es lb://fleets-drivers: cada conexión va a una réplica distinta (round-robin) y RabbitMQ
+        # entrega la telemetría a todas.
         - id: fleets-drivers-telemetry-ws
           uri: ${TRUCKCAR_FLEETS_DRIVERS_URL:http://localhost:8081}
           predicates:
@@ -85,6 +87,12 @@ gateway:
     # Patrones de origen: en local cualquier puerto de localhost/127.0.0.1 (Live Server, nginx :5500, etc.).
     # En producción definir TRUCKCAR_CORS_ALLOWED_ORIGINS con el dominio real del frontend.
     allowed-origins: ${TRUCKCAR_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+
+# Puertos de los servicios que se balancean con lb://<servicio> (las instancias salen de DNS).
+truckcar:
+  loadbalancer:
+    ports:
+      fleets-drivers: 8081
 
 management:
   endpoints:
