@@ -25,11 +25,13 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private final JwtUtil jwtUtil;
 
+    /**
+     * Rutas sin JWT. Del actuator solo /actuator/health (y sus probes /actuator/health/**): el resto, en especial
+     * /actuator/gateway, permitiría listar o registrar rutas hacia los servicios internos.
+     */
     private final List<String> openEndpoints = List.of(
             "/api/v1/auth",
-            "/actuator",
-            "/v3/api-docs",
-            "/swagger-ui"
+            "/actuator/health"
     );
 
     public JwtAuthenticationFilter(JwtUtil jwtUtil) {

@@ -90,4 +90,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health
+  endpoint:
+    # /actuator/gateway permite leer y registrar rutas (POST /actuator/gateway/routes/{id}); se desactiva del todo.
+    gateway:
+      enabled: false

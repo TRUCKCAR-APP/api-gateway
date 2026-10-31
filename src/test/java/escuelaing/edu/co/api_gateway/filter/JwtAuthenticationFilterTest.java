@@ -69,6 +69,17 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void onlyActuatorHealthIsPublic() {
+        for (String path : new String[] {"/actuator/gateway/routes", "/actuator/info", "/actuator", "/v3/api-docs"}) {
+            MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path).build());
+
+            filter.filter(exchange, mock(GatewayFilterChain.class)).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).as(path).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    @Test
     void propagatesIdentityAndCorrelationIdForValidToken() {
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_SECRET));
         String token = Jwts.builder()
