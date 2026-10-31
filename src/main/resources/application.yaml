@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: ms-api-gateway
+  # Copia el contexto de la traza (traceId/spanId) entre los hilos de Reactor para los logs.
+  reactor:
+    context-propagation: auto
 
   cloud:
     gateway:
@@ -94,12 +97,34 @@ truckcar:
     ports:
       fleets-drivers: 8081
 
+# ── Observabilidad ──────────────────────────────────────────────────────────────────────────────
+# El actuator escucha en un puerto propio (8090) que no se publica: :8000 solo sirve las rutas de la API, así que
+# /actuator/prometheus queda accesible solo dentro de la red interna (Prometheus).
+# Las trazas se exportan por OTLP al otel-collector cuando se define MANAGEMENT_OTLP_TRACING_ENDPOINT (en Docker,
+# http://otel-collector:4318/v1/traces); sin ella no se exporta nada.
 management:
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:8090}
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
   endpoint:
     # /actuator/gateway permite leer y registrar rutas (POST /actuator/gateway/routes/{id}); se desactiva del todo.
     gateway:
       enabled: false
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    sampling:
+      probability: ${TRUCKCAR_TRACING_SAMPLING_PROBABILITY:1.0}
+
+logging:
+  # [servicio,traceId,spanId] en cada línea de log.
+  include-application-name: false
+  pattern:
+    correlation: "[${spring.application.name:},%X{traceId:-},%X{spanId:-}] "
