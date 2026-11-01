@@ -6,6 +6,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/actuator/health"
     );
 
+    /**
+     * Seguimiento público de envíos (enlace firmado que valida Load-Allocation): sin JWT, solo GET y sin "..", "%2e" ni
+     * "%2f", para que el prefijo abierto no sirva de puente hacia otras rutas de /api/v1/loads tras normalizar.
+     */
+    private static final String PUBLIC_TRACKING_PREFIX = "/api/v1/loads/public-tracking/";
+
     public JwtAuthenticationFilter(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
     }
@@ -48,7 +55,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         }
 
         boolean isOpen = openEndpoints.stream()
-                .anyMatch(endpoint -> path.equals(endpoint) || path.startsWith(endpoint + "/"));
+                .anyMatch(endpoint -> path.equals(endpoint) || path.startsWith(endpoint + "/"))
+                || isPublicTracking(request, path);
         if (isOpen) {
             return forwardWithCorrelationId(exchange, chain, correlationId);
         }
@@ -104,6 +112,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private String roleOf(Claims claims) {
         Object role = claims.get("role");
         return role == null ? "" : role.toString();
+    }
+
+    private static boolean isPublicTracking(ServerHttpRequest request, String path) {
+        String lower = path.toLowerCase();
+        return HttpMethod.GET.equals(request.getMethod())
+                && path.startsWith(PUBLIC_TRACKING_PREFIX)
+                && path.length() > PUBLIC_TRACKING_PREFIX.length()
+                && !path.contains("..") && !lower.contains("%2e") && !lower.contains("%2f");
     }
 
     private Mono<Void> forwardWithCorrelationId(

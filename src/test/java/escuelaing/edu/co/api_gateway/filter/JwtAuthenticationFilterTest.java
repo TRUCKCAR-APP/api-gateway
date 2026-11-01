@@ -133,6 +133,41 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void publicTrackingIsAnonymousOnlyForGetAndNeverForwardsIdentity() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/loads/public-tracking/abc.def")
+                        .header("X-Auth-User", "spoofed")
+                        .header("X-Auth-Role", "ADMIN")
+                        .build());
+        boolean[] forwarded = {false};
+        GatewayFilterChain chain = forwardedExchange -> {
+            forwarded[0] = true;
+            assertThat(forwardedExchange.getRequest().getHeaders().containsKey("X-Auth-User")).isFalse();
+            assertThat(forwardedExchange.getRequest().getHeaders().containsKey("X-Auth-Role")).isFalse();
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(forwarded[0]).isTrue();
+    }
+
+    @Test
+    void publicTrackingPrefixCannotReachOtherLoadRoutes() {
+        for (String path : new String[] {"/api/v1/loads/public-tracking/../5", "/api/v1/loads/public-tracking/%2e%2e/5",
+                "/api/v1/loads/public-tracking/x%2F..%2F5", "/api/v1/loads/public-tracking/", "/api/v1/loads/5/public-tracking-link"}) {
+            MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path).build());
+
+            filter.filter(exchange, mock(GatewayFilterChain.class)).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).as(path).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+        MockServerWebExchange post = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/loads/public-tracking/abc").build());
+        filter.filter(post, mock(GatewayFilterChain.class)).block();
+        assertThat(post.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
     void publicEndpointsNeverForwardClientSuppliedIdentityHeaders() {
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.post("/api/v1/auth/login")
