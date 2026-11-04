@@ -1,5 +1,6 @@
 package escuelaing.edu.co.api_gateway.filter;
 
+import escuelaing.edu.co.api_gateway.telemetry.WsTicketStore;
 import escuelaing.edu.co.api_gateway.util.JwtUtil;
 import io.jsonwebtoken.Claims;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -15,6 +16,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -22,9 +24,13 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     /** Telemetría GPS en tiempo real (STOMP sobre WebSocket hacia fleets-drivers). */
     private static final String WS_TELEMETRY_PATH = "/ws-telemetry";
-    private static final String ACCESS_TOKEN_PARAM = "access_token";
+    /** Ticket de un solo uso (POST /api/v1/telemetry/ws-ticket): el navegador no puede enviar cabeceras al abrir un WebSocket. */
+    private static final String TICKET_PARAM = "ticket";
+    /** Ya no autentica: si un cliente antiguo lo envía, se quita de la URL para que no llegue a fleets-drivers. */
+    private static final String LEGACY_TOKEN_PARAM = "access_token";
 
     private final JwtUtil jwtUtil;
+    private final WsTicketStore tickets;
 
     /**
      * Rutas sin JWT. Del actuator solo /actuator/health (y sus probes /actuator/health/**): el resto, en especial
@@ -41,18 +47,19 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      */
     private static final String PUBLIC_TRACKING_PREFIX = "/api/v1/loads/public-tracking/";
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, WsTicketStore tickets) {
         this.jwtUtil = jwtUtil;
+        this.tickets = tickets;
     }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
-        String correlationId = request.getHeaders().getFirst("X-Correlation-Id");
-        if (correlationId == null || correlationId.isBlank()) {
-            correlationId = UUID.randomUUID().toString();
-        }
+        String incomingCorrelationId = request.getHeaders().getFirst("X-Correlation-Id");
+        String correlationId = incomingCorrelationId == null || incomingCorrelationId.isBlank()
+                ? UUID.randomUUID().toString()
+                : incomingCorrelationId;
 
         boolean isOpen = openEndpoints.stream()
                 .anyMatch(endpoint -> path.equals(endpoint) || path.startsWith(endpoint + "/"))
@@ -62,18 +69,36 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         }
 
         boolean telemetrySocket = path.equals(WS_TELEMETRY_PATH) || path.startsWith(WS_TELEMETRY_PATH + "/");
-        String token = extractToken(request, telemetrySocket);
-        if (token == null || !jwtUtil.isTokenValid(token)) {
-            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-            return exchange.getResponse().setComplete();
+        String token = bearerToken(request);
+        if (token != null && jwtUtil.isTokenValid(token)) {
+            Claims claims = jwtUtil.getClaims(token);
+            return forwardAuthenticated(exchange, chain, claims.getSubject(), roleOf(claims), correlationId,
+                    telemetrySocket);
         }
+        if (token == null && telemetrySocket) {
+            // Navegador: identidad del ticket de un solo uso. Sin ticket, vencido o ya usado: 401.
+            String ticket = request.getQueryParams().getFirst(TICKET_PARAM);
+            // Se decide antes de reenviar: el reenvío también termina vacío (Mono<Void>) y no debe confundirse con
+            // "ticket inexistente".
+            return tickets.redeem(ticket)
+                    .map(Optional::of)
+                    .defaultIfEmpty(Optional.empty())
+                    .flatMap(owner -> owner
+                            .map(o -> forwardAuthenticated(exchange, chain, o.userId(), o.role(), correlationId, true))
+                            .orElseGet(() -> unauthorized(exchange)));
+        }
+        return unauthorized(exchange);
+    }
 
-        Claims claims = jwtUtil.getClaims(token);
-        ServerHttpRequest.Builder requestBuilder = exchange.getRequest().mutate();
+    private Mono<Void> forwardAuthenticated(ServerWebExchange exchange, GatewayFilterChain chain, String userId,
+                                            String role, String correlationId, boolean telemetrySocket) {
+        ServerHttpRequest request = exchange.getRequest();
+        ServerHttpRequest.Builder requestBuilder = request.mutate();
         if (telemetrySocket) {
-            // El token no viaja al servicio: se quita de la URL tras validarlo.
+            // Ninguna credencial viaja al servicio en la URL.
             requestBuilder.uri(UriComponentsBuilder.fromUri(request.getURI())
-                    .replaceQueryParam(ACCESS_TOKEN_PARAM)
+                    .replaceQueryParam(TICKET_PARAM)
+                    .replaceQueryParam(LEGACY_TOKEN_PARAM)
                     .build(true)
                     .toUri());
         }
@@ -83,8 +108,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                     requestHeaders.remove("X-Auth-Role");
                     requestHeaders.remove("X-Correlation-Id");
                 })
-                .header("X-Auth-User", claims.getSubject())
-                .header("X-Auth-Role", roleOf(claims))
+                .header("X-Auth-User", userId)
+                .header("X-Auth-Role", role)
                 .header("X-Correlation-Id", correlationId)
                 .build();
 
@@ -92,20 +117,15 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
     }
 
-    /**
-     * JWT de la cabecera Authorization. En el handshake de /ws-telemetry también se acepta ?access_token=..., porque
-     * la API WebSocket del navegador no permite enviar cabeceras; en cualquier otra ruta el token en la URL se ignora.
-     */
-    private String extractToken(ServerHttpRequest request, boolean telemetrySocket) {
+    private static Mono<Void> unauthorized(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+        return exchange.getResponse().setComplete();
+    }
+
+    /** JWT de la cabecera Authorization. Un token en la URL nunca autentica, tampoco en /ws-telemetry. */
+    private static String bearerToken(ServerHttpRequest request) {
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            return authHeader.substring(7);
-        }
-        if (telemetrySocket) {
-            String queryToken = request.getQueryParams().getFirst(ACCESS_TOKEN_PARAM);
-            return queryToken == null || queryToken.isBlank() ? null : queryToken;
-        }
-        return null;
+        return authHeader != null && authHeader.startsWith("Bearer ") ? authHeader.substring(7) : null;
     }
 
     /** Rol emitido por User-Identity (CONDUCTOR, COORDINADOR, GENERADOR, ADMIN); vacío si el token no lo trae. */

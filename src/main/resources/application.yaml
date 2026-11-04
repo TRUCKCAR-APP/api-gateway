@@ -7,6 +7,12 @@ spring:
   # Copia el contexto de la traza (traceId/spanId) entre los hilos de Reactor para los logs.
   reactor:
     context-propagation: auto
+  # Tickets del WebSocket de telemetría (WsTicketStore). En Kubernetes el host llega en SPRING_DATA_REDIS_HOST
+  # (ConfigMap truckcar-platform); en Docker, el contenedor redis.
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
 
   cloud:
     gateway:
@@ -31,7 +37,8 @@ spring:
             - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
         # Telemetría GPS: el handshake WebSocket (STOMP) se reenvía a fleets-drivers. Con Upgrade: websocket el
-        # gateway cambia http:// por ws:// automáticamente. El JWT llega como ?access_token= y se quita al validar.
+        # gateway cambia http:// por ws:// automáticamente. El JWT nunca va en la URL: la PWA pide antes un ticket de un
+        # solo uso (POST /api/v1/telemetry/ws-ticket) y lo envía como ?ticket=, que el gateway canjea y retira.
         # En Docker la URL es lb://fleets-drivers: cada conexión va a una réplica distinta (round-robin) y RabbitMQ
         # entrega la telemetría a todas.
         - id: fleets-drivers-telemetry-ws
@@ -93,6 +100,9 @@ gateway:
 
 # Puertos de los servicios que se balancean con lb://<servicio> (las instancias salen de DNS).
 truckcar:
+  telemetry:
+    # Vida del ticket del WebSocket: lo justo para abrir la conexión. Se borra en el primer uso.
+    ws-ticket-ttl: ${TRUCKCAR_WS_TICKET_TTL:30s}
   loadbalancer:
     ports:
       fleets-drivers: 8081
@@ -109,6 +119,10 @@ management:
     web:
       exposure:
         include: health,prometheus
+  health:
+    # Sin Redis solo falla la apertura del WebSocket: la API REST sigue y el pod no debe salir de servicio.
+    redis:
+      enabled: false
   endpoint:
     # /actuator/gateway permite leer y registrar rutas (POST /actuator/gateway/routes/{id}); se desactiva del todo.
     gateway:
