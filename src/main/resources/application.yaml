@@ -105,6 +105,9 @@ gateway:
     # Patrones de origen: en local cualquier puerto de localhost/127.0.0.1 (Live Server, nginx :5500, etc.).
     # En producción definir TRUCKCAR_CORS_ALLOWED_ORIGINS con el dominio real del frontend.
     allowed-origins: ${TRUCKCAR_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+  # Orígenes de red (CIDR separados por coma) desde los que se aceptan conexiones: en AWS, las subredes del ALB.
+  # Vacío = cualquier origen (Docker / desarrollo local). Ver TrustedSourceFilter.
+  trusted-source-cidrs: ${TRUCKCAR_GATEWAY_TRUSTED_SOURCE_CIDRS:}
 
 # Puertos de los servicios que se balancean con lb://<servicio> (las instancias salen de DNS).
 truckcar:

@@ -90,6 +90,7 @@ class JwtAuthenticationFilterTest {
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_SECRET));
         String token = Jwts.builder()
                 .subject("user-123")
+                .claim("role", "CONDUCTOR")
                 .expiration(new Date(System.currentTimeMillis() + 60_000))
                 .signWith(key)
                 .compact();
