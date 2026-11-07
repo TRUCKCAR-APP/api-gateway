@@ -96,6 +96,16 @@ spring:
             - RemoveRequestHeader=Origin
             - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
+        # Plantillas de notificación (solo ADMIN: JwtAuthenticationFilter responde 403 a otro rol y Notifications lo
+        # vuelve a exigir con @PreAuthorize).
+        - id: templates-route
+          uri: ${TRUCKCAR_NOTIFICATIONS_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/templates, /api/v1/templates/**
+          filters:
+            - RemoveRequestHeader=Origin
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
+
 app:
   jwt:
     secret: ${TRUCKCAR_JWT_SECRET:${JWT_SECRET:}}

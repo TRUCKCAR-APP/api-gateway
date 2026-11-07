@@ -7,6 +7,7 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
@@ -212,6 +213,43 @@ class JwtAuthenticationFilterTest {
         };
 
         filter.filter(exchange, chain).block();
+    }
+
+    @Test
+    void templatesAreOnlyForwardedForAnAdmin() {
+        java.util.concurrent.atomic.AtomicBoolean forwarded = new java.util.concurrent.atomic.AtomicBoolean();
+        GatewayFilterChain chain = forwardedExchange -> {
+            forwarded.set(true);
+            return Mono.empty();
+        };
+
+        MockServerWebExchange admin = MockServerWebExchange.from(MockServerHttpRequest.put("/api/v1/templates/abc")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("admin-1", "ADMIN")).build());
+        filter.filter(admin, chain).block();
+        assertThat(forwarded).isTrue();
+
+        for (String role : new String[] {"COORDINADOR", "CONDUCTOR", "GENERADOR"}) {
+            forwarded.set(false);
+            MockServerWebExchange other = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/templates")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("u-1", role)).build());
+            filter.filter(other, chain).block();
+            assertThat(other.getResponse().getStatusCode()).as(role).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(forwarded).as(role).isFalse();
+        }
+    }
+
+    @Test
+    void theAdminOnlyPrefixDoesNotCatchSimilarPaths() {
+        java.util.concurrent.atomic.AtomicBoolean forwarded = new java.util.concurrent.atomic.AtomicBoolean();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/templates-public")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("u-1", "CONDUCTOR")).build());
+
+        filter.filter(exchange, forwardedExchange -> {
+            forwarded.set(true);
+            return Mono.empty();
+        }).block();
+
+        assertThat(forwarded).isTrue();
     }
 
     private String tokenFor(String subject, String role) {

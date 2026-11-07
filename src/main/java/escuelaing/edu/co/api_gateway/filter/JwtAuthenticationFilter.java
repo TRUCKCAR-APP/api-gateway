@@ -47,6 +47,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      */
     private static final String PUBLIC_TRACKING_PREFIX = "/api/v1/loads/public-tracking/";
 
+    /**
+     * Rutas solo para ADMIN. El servicio también lo exige (@PreAuthorize en Notifications); el gateway responde 403 antes
+     * de reenviar para que un token de otro rol ni siquiera llegue al servicio.
+     */
+    private static final List<String> ADMIN_ONLY_PREFIXES = List.of("/api/v1/templates");
+
     public JwtAuthenticationFilter(JwtUtil jwtUtil, WsTicketStore tickets) {
         this.jwtUtil = jwtUtil;
         this.tickets = tickets;
@@ -72,6 +78,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         String token = bearerToken(request);
         if (token != null && jwtUtil.isTokenValid(token)) {
             Claims claims = jwtUtil.getClaims(token);
+            if (adminOnly(path) && !"ADMIN".equals(roleOf(claims))) {
+                return forbidden(exchange, correlationId);
+            }
             return forwardAuthenticated(exchange, chain, claims.getSubject(), roleOf(claims), correlationId,
                     telemetrySocket);
         }
@@ -115,6 +124,16 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         exchange.getResponse().getHeaders().set("X-Correlation-Id", correlationId);
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
+    }
+
+    private static boolean adminOnly(String path) {
+        return ADMIN_ONLY_PREFIXES.stream().anyMatch(prefix -> path.equals(prefix) || path.startsWith(prefix + "/"));
+    }
+
+    private static Mono<Void> forbidden(ServerWebExchange exchange, String correlationId) {
+        exchange.getResponse().getHeaders().set("X-Correlation-Id", correlationId);
+        exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+        return exchange.getResponse().setComplete();
     }
 
     private static Mono<Void> unauthorized(ServerWebExchange exchange) {
