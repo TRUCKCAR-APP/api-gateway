@@ -26,6 +26,11 @@ class WsTicketControllerTest {
     private final WsTicketStore tickets = mock(WsTicketStore.class);
     private final WsTicketController controller = new WsTicketController(new JwtUtil(TEST_SECRET), tickets);
 
+    private static org.springframework.web.server.ServerWebExchange exchange() {
+        return org.springframework.mock.web.server.MockServerWebExchange.from(
+                org.springframework.mock.http.server.reactive.MockServerHttpRequest.post("/api/v1/telemetry/ws-ticket").build());
+    }
+
     private static String token(String subject, String role) {
         return Jwts.builder().subject(subject).claim("role", role)
                 .expiration(new Date(System.currentTimeMillis() + 60_000))
@@ -39,7 +44,7 @@ class WsTicketControllerTest {
         when(tickets.ttl()).thenReturn(Duration.ofSeconds(30));
 
         ResponseEntity<Map<String, Object>> response =
-                controller.issue("Bearer " + token("driver-1", "CONDUCTOR")).block();
+                controller.issue("Bearer " + token("driver-1", "CONDUCTOR"), exchange()).block();
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).containsEntry("ticket", "ticket-1").containsEntry("expiresInSeconds", 30L);
@@ -49,7 +54,7 @@ class WsTicketControllerTest {
     @Test
     void withoutAValidJwtThereIsNoTicket() {
         for (String header : new String[]{null, "", "Bearer basura", token("driver-1", "CONDUCTOR")}) {
-            assertThat(controller.issue(header).block().getStatusCode()).as(String.valueOf(header))
+            assertThat(controller.issue(header, exchange()).block().getStatusCode()).as(String.valueOf(header))
                     .isEqualTo(HttpStatus.UNAUTHORIZED);
         }
         verify(tickets, never()).issue(any(), any());
@@ -59,7 +64,7 @@ class WsTicketControllerTest {
     void ifRedisFailsTheClientGets503() {
         when(tickets.issue(any(), any())).thenReturn(Mono.error(new IllegalStateException("Redis caído")));
 
-        assertThat(controller.issue("Bearer " + token("coord-1", "COORDINADOR")).block().getStatusCode())
+        assertThat(controller.issue("Bearer " + token("coord-1", "COORDINADOR"), exchange()).block().getStatusCode())
                 .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
 }
