@@ -1,5 +1,10 @@
 server:
   port: 8000
+  # La IP de la conexión debe ser la real (el ALB), no la de X-Forwarded-For: TrustedSourceFilter decide con ella. En
+  # Kubernetes Spring Boot activa por defecto forward-headers-strategy=native y Reactor Netty reescribe la dirección
+  # remota con X-Forwarded-For: el gateway veía la IP pública del cliente y rechazaba todo el tráfico del ALB. Los
+  # servicios siguen recibiendo la IP del cliente: el ALB la envía en X-Forwarded-For y el gateway agrega la suya.
+  forward-headers-strategy: none
 
 spring:
   application:
