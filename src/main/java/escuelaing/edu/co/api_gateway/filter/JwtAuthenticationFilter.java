@@ -1,6 +1,7 @@
 package escuelaing.edu.co.api_gateway.filter;
 
 import escuelaing.edu.co.api_gateway.error.GatewayErrors;
+import escuelaing.edu.co.api_gateway.security.PathNormalization;
 import escuelaing.edu.co.api_gateway.telemetry.WsTicketStore;
 import escuelaing.edu.co.api_gateway.util.JwtUtil;
 import io.jsonwebtoken.Claims;
@@ -86,7 +87,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             if (claims.isEmpty()) {
                 return unauthorized(exchange, "El token de acceso no es válido o ya venció; inicie sesión de nuevo");
             }
-            if (adminOnly(path) && !"ADMIN".equals(roleOf(claims.get()))) {
+            if (adminOnly(request.getURI().getRawPath()) && !"ADMIN".equals(roleOf(claims.get()))) {
                 return forbidden(exchange);
             }
             return forwardAuthenticated(exchange, chain, claims.get().getSubject(), roleOf(claims.get()), correlationId,
@@ -151,8 +152,13 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
     }
 
-    private static boolean adminOnly(String path) {
-        return ADMIN_ONLY_PREFIXES.stream().anyMatch(prefix -> path.equals(prefix) || path.startsWith(prefix + "/"));
+    /**
+     * Sobre la ruta normalizada (PathNormalization), no sobre el texto crudo: /api/v1/notifications/../templates,
+     * /api/v1/notifications/%2e%2e/templates o /api/v1/templates;x=1 entran por otra ruta del gateway, pero Notifications
+     * las atiende como /api/v1/templates. Sin normalizar, el gateway las reenviaba y solo el servicio las frenaba.
+     */
+    static boolean adminOnly(String rawPath) {
+        return ADMIN_ONLY_PREFIXES.stream().anyMatch(prefix -> PathNormalization.isUnder(rawPath, prefix));
     }
 
     /** Ruta reservada a ADMIN con un token válido de otro rol: 403 con el JSON normalizado (X-Correlation-Id ya fijado). */

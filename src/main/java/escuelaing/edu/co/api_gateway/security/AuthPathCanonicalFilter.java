@@ -10,13 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
-import org.springframework.web.util.UriUtils;
 import reactor.core.publisher.Mono;
-
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Locale;
 
 /**
  * El límite de intentos (KAN-31) se aplica por ruta exacta: /api/v1/auth/login, /register y /refresh. Variantes como
@@ -47,19 +41,7 @@ public class AuthPathCanonicalFilter implements WebFilter {
 
     /** ¿La ruta, una vez decodificada y normalizada como lo haría el servicio, apunta a /api/v1/auth? */
     static boolean targetsAuth(String rawPath) {
-        String decoded;
-        try {
-            decoded = UriUtils.decode(rawPath, StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
-            decoded = rawPath;   // % mal formado: se evalúa tal cual
-        }
-        String normalized = removeDotSegments(decoded.replace('\\', '/').replaceAll("/{2,}", "/"))
-                .toLowerCase(Locale.ROOT);
-        int matrix = normalized.indexOf(';');
-        if (matrix >= 0) {
-            normalized = normalized.substring(0, matrix);
-        }
-        return normalized.equals(AUTH_PREFIX) || normalized.startsWith(AUTH_PREFIX + "/");
+        return PathNormalization.isUnder(rawPath, AUTH_PREFIX);
     }
 
     static boolean isCanonical(String rawPath) {
@@ -72,20 +54,5 @@ public class AuthPathCanonicalFilter implements WebFilter {
             }
         }
         return true;
-    }
-
-    private static String removeDotSegments(String path) {
-        Deque<String> out = new ArrayDeque<>();
-        for (String segment : path.split("/")) {
-            if (segment.isEmpty() || segment.equals(".")) {
-                continue;
-            }
-            if (segment.equals("..")) {
-                out.pollLast();
-            } else {
-                out.addLast(segment);
-            }
-        }
-        return "/" + String.join("/", out);
     }
 }
