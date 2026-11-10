@@ -27,7 +27,9 @@ public class CorsConfig {
                 .toList());
         corsConfig.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         corsConfig.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept", "X-Correlation-Id"));
-        corsConfig.setExposedHeaders(Arrays.asList("X-Correlation-Id"));
+        // Retry-After y X-RateLimit-*: la PWA los lee al recibir un 429 del límite de intentos de /api/v1/auth.
+        corsConfig.setExposedHeaders(Arrays.asList("X-Correlation-Id", "Retry-After", "X-RateLimit-Remaining",
+                "X-RateLimit-Replenish-Rate", "X-RateLimit-Burst-Capacity", "X-RateLimit-Requested-Tokens"));
         corsConfig.setAllowCredentials(true);
         corsConfig.setMaxAge(3600L);
 

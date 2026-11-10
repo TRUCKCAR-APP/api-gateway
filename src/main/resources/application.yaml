@@ -7,12 +7,16 @@ spring:
   # Copia el contexto de la traza (traceId/spanId) entre los hilos de Reactor para los logs.
   reactor:
     context-propagation: auto
-  # Tickets del WebSocket de telemetría (WsTicketStore). En Kubernetes el host llega en SPRING_DATA_REDIS_HOST
-  # (ConfigMap truckcar-platform); en Docker, el contenedor redis.
+  # Tickets del WebSocket de telemetría (WsTicketStore) y límite de intentos de /api/v1/auth (RequestRateLimiter). En
+  # Kubernetes el host llega en SPRING_DATA_REDIS_HOST (ConfigMap truckcar-platform); en Docker, el contenedor redis.
+  # Timeouts cortos: sin ellos Lettuce espera 60 s por comando y, con Redis caído, cada login quedaría colgado un minuto
+  # antes de que el limitador lo deje pasar (fail-open).
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: ${SPRING_DATA_REDIS_TIMEOUT:2s}
+      connect-timeout: ${SPRING_DATA_REDIS_CONNECT_TIMEOUT:2s}
 
   cloud:
     gateway:
@@ -21,7 +25,42 @@ spring:
       # La ruta WebSocket sí conserva Origin: sin él, el cliente WebSocket de Netty inventa uno con la URL del pod
       # (http://<ip>:8081) y fleets-drivers rechaza el handshake (TRUCKCAR_WEBSOCKET_ALLOWED_ORIGINS). Su respuesta del
       # upgrade es de solo lectura, así que tampoco lleva DedupeResponseHeader.
+      #
+      # Límite de intentos (KAN-31): RequestRateLimiter con un token bucket por IP en Redis (RateLimitConfig). Las rutas
+      # más específicas van primero: login tiene su propio cubo, más estricto que register/refresh, y el resto de
+      # /auth/** y /users/** no tiene límite. Al agotarlo: 429 con JSON, Retry-After y X-RateLimit-* (RateLimitResponseFilter).
+      # Si Redis no responde, el limitador deja pasar (fail-open) y lo cuenta truckcar_gateway_rate_limiter_fail_open_total.
       routes:
+        - id: user-identity-login-route
+          uri: ${TRUCKCAR_USER_IDENTITY_URL:http://localhost:8080}
+          predicates:
+            - Path=/api/v1/auth/login
+          filters:
+            - RemoveRequestHeader=Origin
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${TRUCKCAR_RATE_LIMIT_LOGIN_REPLENISH_RATE:1}
+                redis-rate-limiter.burstCapacity: ${TRUCKCAR_RATE_LIMIT_LOGIN_BURST_CAPACITY:5}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@clientIpKeyResolver}"
+                deny-empty-key: true
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
+
+        - id: user-identity-auth-route
+          uri: ${TRUCKCAR_USER_IDENTITY_URL:http://localhost:8080}
+          predicates:
+            - Path=/api/v1/auth/register, /api/v1/auth/refresh
+          filters:
+            - RemoveRequestHeader=Origin
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${TRUCKCAR_RATE_LIMIT_AUTH_REPLENISH_RATE:5}
+                redis-rate-limiter.burstCapacity: ${TRUCKCAR_RATE_LIMIT_AUTH_BURST_CAPACITY:10}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@clientIpKeyResolver}"
+                deny-empty-key: true
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
+
         - id: user-identity-route
           uri: ${TRUCKCAR_USER_IDENTITY_URL:http://localhost:8080}
           predicates:
@@ -118,6 +157,12 @@ gateway:
   # Orígenes de red (CIDR separados por coma) desde los que se aceptan conexiones: en AWS, las subredes del ALB.
   # Vacío = cualquier origen (Docker / desarrollo local). Ver TrustedSourceFilter.
   trusted-source-cidrs: ${TRUCKCAR_GATEWAY_TRUSTED_SOURCE_CIDRS:}
+  # IP del cliente para el límite de intentos (RateLimitConfig). false (Docker/local): la IP de la conexión. Detrás del
+  # ALB, true: la entrada de X-Forwarded-For que agregó el proxy de confianza, contando trusted-proxies desde la derecha
+  # (1 = solo el ALB; 2 = túnel de Cloudflare + ALB). Sin esto, detrás del ALB todos los clientes compartirían un cubo.
+  rate-limit:
+    trust-forwarded-for: ${TRUCKCAR_RATE_LIMIT_TRUST_FORWARDED_FOR:false}
+    trusted-proxies: ${TRUCKCAR_RATE_LIMIT_TRUSTED_PROXIES:1}
 
 # Puertos de los servicios que se balancean con lb://<servicio> (las instancias salen de DNS).
 truckcar:
