@@ -69,7 +69,8 @@ spring:
         - id: user-identity-route
           uri: ${TRUCKCAR_USER_IDENTITY_URL:http://localhost:8080}
           predicates:
-            - Path=/api/v1/auth/**, /api/v1/users/**
+            # /companies/**: transportadoras y afiliación de conductores (User-Identity, con JWT como /users/**).
+            - Path=/api/v1/auth/**, /api/v1/users/**, /api/v1/companies/**, /api/v1/companies
           filters:
             - RemoveRequestHeader=Origin
             - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST

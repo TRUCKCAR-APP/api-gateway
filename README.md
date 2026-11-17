@@ -54,7 +54,7 @@ por IP del cliente en Redis, compartido por todas las réplicas.
 |---|---|---|
 | `POST /api/v1/auth/login` (`user-identity-login-route`) | 1 intento/s, ráfaga de 5 | `TRUCKCAR_RATE_LIMIT_LOGIN_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_LOGIN_BURST_CAPACITY` |
 | `/api/v1/auth/register` y `/refresh` (`user-identity-auth-route`) | 5/s, ráfaga de 10 | `TRUCKCAR_RATE_LIMIT_AUTH_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_AUTH_BURST_CAPACITY` |
-| Resto de `/api/v1/auth/**` y `/api/v1/users/**` | sin límite | — |
+| Resto de `/api/v1/auth/**`, `/api/v1/users/**` y `/api/v1/companies/**` | sin límite | — |
 
 - **Respuesta:** `429` con el JSON de errores (`"message":"Demasiados intentos, espere unos segundos"`), `Retry-After` y
   `X-RateLimit-Remaining`, `-Replenish-Rate`, `-Burst-Capacity` y `-Requested-Tokens`, expuestas por CORS para la PWA.
