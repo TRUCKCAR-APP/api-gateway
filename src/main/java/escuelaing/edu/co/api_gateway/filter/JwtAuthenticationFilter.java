@@ -44,6 +44,17 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      * Rutas sin JWT. Del actuator solo /actuator/health (y sus probes /actuator/health/**): el resto, en especial
      * /actuator/gateway, permitiría listar o registrar rutas hacia los servicios internos.
      */
+    /**
+     * Rutas de /api/v1/auth que sí exigen un access token completo: gestionar la doble autenticación. Un token temporal
+     * del segundo paso (scope 2FA_PENDING) nunca pasa (JwtUtil lo rechaza). /auth/2fa/verify-login sigue abierto: lo
+     * autoriza el token temporal en User-Identity.
+     */
+    private static final java.util.Set<String> AUTHENTICATED_AUTH_PATHS = java.util.Set.of(
+            "/api/v1/auth/2fa/setup",
+            "/api/v1/auth/2fa/verify-setup",
+            "/api/v1/auth/2fa/disable"
+    );
+
     private final List<String> openEndpoints = List.of(
             "/api/v1/auth",
             "/actuator/health"
@@ -73,8 +84,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         String correlationId = correlationIdOf(request);
         exchange.getResponse().getHeaders().set("X-Correlation-Id", correlationId);
 
-        boolean isOpen = openEndpoints.stream()
+        boolean isOpen = (openEndpoints.stream()
                 .anyMatch(endpoint -> path.equals(endpoint) || path.startsWith(endpoint + "/"))
+                && !AUTHENTICATED_AUTH_PATHS.contains(path))
                 || isPublicTracking(request, path);
         if (isOpen) {
             return forwardWithCorrelationId(exchange, chain, correlationId);

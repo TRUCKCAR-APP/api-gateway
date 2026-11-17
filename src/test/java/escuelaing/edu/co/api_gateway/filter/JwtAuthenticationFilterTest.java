@@ -272,6 +272,53 @@ class JwtAuthenticationFilterTest {
         assertThat(forwarded).isTrue();
     }
 
+    // ── Doble autenticación ──
+
+    @Test
+    void managingTwoFactorRequiresAFullSessionButTheSecondLoginStepStaysOpen() {
+        for (String path : new String[] {"/api/v1/auth/2fa/setup", "/api/v1/auth/2fa/verify-setup", "/api/v1/auth/2fa/disable"}) {
+            MockServerWebExchange anonymous = MockServerWebExchange.from(MockServerHttpRequest.post(path).build());
+            GatewayFilterChain chain = mock(GatewayFilterChain.class);
+            filter.filter(anonymous, chain).block();
+            assertThat(anonymous.getResponse().getStatusCode()).as(path).isEqualTo(HttpStatus.UNAUTHORIZED);
+            verify(chain, never()).filter(any());
+
+            MockServerWebExchange signedIn = MockServerWebExchange.from(MockServerHttpRequest.post(path)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("u-2fa", "CONDUCTOR")).build());
+            java.util.concurrent.atomic.AtomicReference<String> user = new java.util.concurrent.atomic.AtomicReference<>();
+            filter.filter(signedIn, forwarded -> {
+                user.set(forwarded.getRequest().getHeaders().getFirst("X-Auth-User"));
+                return Mono.empty();
+            }).block();
+            assertThat(user.get()).as(path).isEqualTo("u-2fa");
+        }
+
+        java.util.concurrent.atomic.AtomicBoolean forwarded = new java.util.concurrent.atomic.AtomicBoolean();
+        filter.filter(MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/auth/2fa/verify-login").build()),
+                exchange -> { forwarded.set(true); return Mono.empty(); }).block();
+        assertThat(forwarded).as("verify-login lo autoriza el token temporal en User-Identity").isTrue();
+    }
+
+    @Test
+    void aTwoFactorPendingTokenIsNeverASessionEvenIfSignedWithTheGatewayKey() {
+        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_SECRET));
+        String pending = Jwts.builder().subject("u-2fa").claim("scope", "2FA_PENDING").claim("role", "CONDUCTOR")
+                .expiration(new Date(System.currentTimeMillis() + 60_000)).signWith(key).compact();
+        String pendingWithoutRole = Jwts.builder().subject("u-2fa").claim("scope", "2FA_PENDING")
+                .expiration(new Date(System.currentTimeMillis() + 60_000)).signWith(key).compact();
+        for (String token : new String[] {pending, pendingWithoutRole}) {
+            for (String path : new String[] {"/api/v1/loads", "/api/v1/users/me", "/api/v1/auth/2fa/setup"}) {
+                MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).build());
+                GatewayFilterChain chain = mock(GatewayFilterChain.class);
+                filter.filter(exchange, chain).block();
+                assertThat(exchange.getResponse().getStatusCode()).as(path).isEqualTo(HttpStatus.UNAUTHORIZED);
+                verify(chain, never()).filter(any());
+            }
+        }
+        assertThat(jwtUtil.isTokenValid(pending)).isFalse();
+    }
+
     private String tokenFor(String subject, String role) {
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(TEST_SECRET));
         return Jwts.builder()
