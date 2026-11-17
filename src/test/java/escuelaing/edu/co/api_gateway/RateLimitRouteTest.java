@@ -68,7 +68,10 @@ class RateLimitRouteTest {
                             .sendString(Mono.just("{}")))
                     .get("/api/v1/users/me", (req, res) -> res.status(200)
                             .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                            .sendString(Mono.just("{\"id\":\"" + req.requestHeaders().get("X-Auth-User") + "\"}"))))
+                            .sendString(Mono.just("{\"id\":\"" + req.requestHeaders().get("X-Auth-User") + "\"}")))
+                    .get("/api/v1/companies/me/drivers", (req, res) -> res.status(200)
+                            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                            .sendString(Mono.just("[{\"owner\":\"" + req.requestHeaders().get("X-Auth-User") + "\"}]"))))
             .bindNow();
 
     @DynamicPropertySource
@@ -181,6 +184,12 @@ class RateLimitRouteTest {
                     .exchange().expectStatus().isOk()
                     .expectBody(String.class).isEqualTo("{\"id\":\"85787f20-0c4b-425b-b435-a12dd4b39f8b\"}");
         }
+
+        // /companies/** (transportadoras) llega a User-Identity con el usuario del token, sin límite.
+        client.get().uri("/api/v1/companies/me/drivers").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange().expectStatus().isOk()
+                .expectBody(String.class).isEqualTo("[{\"owner\":\"85787f20-0c4b-425b-b435-a12dd4b39f8b\"}]");
+        client.get().uri("/api/v1/companies/me/drivers").exchange().expectStatus().isUnauthorized();
 
         // register tiene su propio cubo: el login agotado no lo bloquea.
         client.post().uri("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
