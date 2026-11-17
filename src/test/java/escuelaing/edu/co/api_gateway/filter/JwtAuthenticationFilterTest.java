@@ -217,6 +217,25 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void aTransportadoraTokenIsAcceptedAndItsRoleForwarded() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/companies/me/drivers")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("empresa-1", "TRANSPORTADORA"))
+                        .build());
+        java.util.concurrent.atomic.AtomicBoolean forwarded = new java.util.concurrent.atomic.AtomicBoolean();
+        GatewayFilterChain chain = forwardedExchange -> {
+            forwarded.set(true);
+            assertThat(forwardedExchange.getRequest().getHeaders().get("X-Auth-Role")).containsExactly("TRANSPORTADORA");
+            assertThat(forwardedExchange.getRequest().getHeaders().get("X-Auth-User")).containsExactly("empresa-1");
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(forwarded).as("el token de una transportadora no se rechaza con 401").isTrue();
+    }
+
+    @Test
     void templatesAreOnlyForwardedForAnAdmin() {
         java.util.concurrent.atomic.AtomicBoolean forwarded = new java.util.concurrent.atomic.AtomicBoolean();
         GatewayFilterChain chain = forwardedExchange -> {
@@ -229,7 +248,7 @@ class JwtAuthenticationFilterTest {
         filter.filter(admin, chain).block();
         assertThat(forwarded).isTrue();
 
-        for (String role : new String[] {"COORDINADOR", "CONDUCTOR", "GENERADOR"}) {
+        for (String role : new String[] {"COORDINADOR", "CONDUCTOR", "GENERADOR", "TRANSPORTADORA"}) {
             forwarded.set(false);
             MockServerWebExchange other = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/templates")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("u-1", role)).build());

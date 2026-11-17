@@ -15,7 +15,7 @@ import java.util.Set;
 public class JwtUtil {
 
     /** Roles que emite User-Identity (enum Role). */
-    public static final Set<String> USER_ROLES = Set.of("CONDUCTOR", "COORDINADOR", "GENERADOR", "ADMIN");
+    public static final Set<String> USER_ROLES = Set.of("CONDUCTOR", "COORDINADOR", "GENERADOR", "TRANSPORTADORA", "ADMIN");
     /** Un access token real ocupa unos cientos de bytes; uno enorme no se intenta parsear. */
     private static final int MAX_TOKEN_LENGTH = 8192;
 
