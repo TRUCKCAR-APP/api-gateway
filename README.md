@@ -52,8 +52,13 @@ por IP del cliente en Redis, compartido por todas las réplicas.
 
 | Ruta | Límite por defecto | Variables |
 |---|---|---|
-| `POST /api/v1/auth/login` (`user-identity-login-route`) | 1 intento/s, ráfaga de 5 | `TRUCKCAR_RATE_LIMIT_LOGIN_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_LOGIN_BURST_CAPACITY` |
-| `/api/v1/auth/register` y `/refresh` (`user-identity-auth-route`) | 5/s, ráfaga de 10 | `TRUCKCAR_RATE_LIMIT_AUTH_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_AUTH_BURST_CAPACITY` |
+| `POST /api/v1/auth/login` y `/api/v1/auth/2fa/verify-login` (`user-identity-login-route`) | 1 intento/s, ráfaga de 5 | `TRUCKCAR_RATE_LIMIT_LOGIN_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_LOGIN_BURST_CAPACITY` |
+| `/api/v1/auth/register`, `/refresh` y `/2fa/setup`, `/2fa/verify-setup`, `/2fa/disable` (`user-identity-auth-route`) | 5/s, ráfaga de 10 | `TRUCKCAR_RATE_LIMIT_AUTH_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_AUTH_BURST_CAPACITY` |
+
+**Doble autenticación:**
+- `/api/v1/auth/2fa/setup`, `/verify-setup` y `/disable` exigen un access token completo, aunque estén bajo `/auth`.
+- `/2fa/verify-login` es público: lo autoriza el token temporal en User-Identity.
+- Un JWT con `scope` (el token temporal `2FA_PENDING` del segundo paso) nunca se acepta como sesión.
 | Resto de `/api/v1/auth/**`, `/api/v1/users/**` y `/api/v1/companies/**` | sin límite | — |
 
 - **Respuesta:** `429` con el JSON de errores (`"message":"Demasiados intentos, espere unos segundos"`), `Retry-After` y

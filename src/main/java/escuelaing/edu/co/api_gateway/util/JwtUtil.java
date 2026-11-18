@@ -65,6 +65,11 @@ public class JwtUtil {
             if (subject == null || subject.isBlank() || role == null || !USER_ROLES.contains(role.toString())) {
                 return Optional.empty();
             }
+            // Token temporal entre la contraseña y el código 2FA: no es una sesión (User-Identity además lo firma con
+            // otra llave; esto lo rechaza aunque llegara firmado con la del gateway).
+            if (claims.get("scope") != null) {
+                return Optional.empty();
+            }
             return Optional.of(claims);
         } catch (Exception e) {
             return Optional.empty();
