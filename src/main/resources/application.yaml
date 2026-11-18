@@ -39,8 +39,9 @@ spring:
         - id: user-identity-login-route
           uri: ${TRUCKCAR_USER_IDENTITY_URL:http://localhost:8080}
           predicates:
-            # El segundo paso del 2FA comparte el cubo estricto del login: 1 intento/s con ráfaga de 5 por IP.
-            - Path=/api/v1/auth/login, /api/v1/auth/2fa/verify-login
+            # El segundo paso del 2FA y la recuperación de contraseña (pedir código, verificarlo y fijar la nueva)
+            # comparten el cubo estricto del login: 1 intento/s con ráfaga de 5 por IP.
+            - Path=/api/v1/auth/login, /api/v1/auth/2fa/verify-login, /api/v1/auth/password/forgot, /api/v1/auth/password/verify, /api/v1/auth/password/reset
           filters:
             - RemoveRequestHeader=Origin
             - name: RequestRateLimiter

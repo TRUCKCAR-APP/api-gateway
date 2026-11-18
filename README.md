@@ -52,7 +52,7 @@ por IP del cliente en Redis, compartido por todas las réplicas.
 
 | Ruta | Límite por defecto | Variables |
 |---|---|---|
-| `POST /api/v1/auth/login` y `/api/v1/auth/2fa/verify-login` (`user-identity-login-route`) | 1 intento/s, ráfaga de 5 | `TRUCKCAR_RATE_LIMIT_LOGIN_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_LOGIN_BURST_CAPACITY` |
+| `POST /api/v1/auth/login`, `/api/v1/auth/2fa/verify-login` y la recuperación de contraseña `/api/v1/auth/password/forgot`, `/verify` y `/reset` (`user-identity-login-route`) | 1 intento/s, ráfaga de 5 | `TRUCKCAR_RATE_LIMIT_LOGIN_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_LOGIN_BURST_CAPACITY` |
 | `/api/v1/auth/register`, `/refresh` y `/2fa/setup`, `/2fa/verify-setup`, `/2fa/disable` (`user-identity-auth-route`) | 5/s, ráfaga de 10 | `TRUCKCAR_RATE_LIMIT_AUTH_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_AUTH_BURST_CAPACITY` |
 | `/api/v1/assistant/**` (`voice-ai-assistant-route`, exige JWT; cada petición es una llamada a Azure OpenAI) | 1/s, ráfaga de 10 | `TRUCKCAR_RATE_LIMIT_ASSISTANT_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_ASSISTANT_BURST_CAPACITY` |
 | Resto de `/api/v1/auth/**`, `/api/v1/users/**` y `/api/v1/companies/**` | sin límite | — |
