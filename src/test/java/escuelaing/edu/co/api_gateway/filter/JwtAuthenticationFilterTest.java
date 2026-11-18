@@ -297,6 +297,14 @@ class JwtAuthenticationFilterTest {
         filter.filter(MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/auth/2fa/verify-login").build()),
                 exchange -> { forwarded.set(true); return Mono.empty(); }).block();
         assertThat(forwarded).as("verify-login lo autoriza el token temporal en User-Identity").isTrue();
+
+        // Recuperar la contraseña es sin sesión: quien la olvidó no tiene token.
+        for (String path : new String[] {"/api/v1/auth/password/forgot", "/api/v1/auth/password/verify", "/api/v1/auth/password/reset"}) {
+            java.util.concurrent.atomic.AtomicBoolean reached = new java.util.concurrent.atomic.AtomicBoolean();
+            filter.filter(MockServerWebExchange.from(MockServerHttpRequest.post(path).build()),
+                    exchange -> { reached.set(true); return Mono.empty(); }).block();
+            assertThat(reached).as(path + " es público").isTrue();
+        }
     }
 
     @Test

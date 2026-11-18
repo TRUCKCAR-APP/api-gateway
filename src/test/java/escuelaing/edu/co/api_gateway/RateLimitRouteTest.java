@@ -132,6 +132,18 @@ class RateLimitRouteTest {
     }
 
     @Test
+    @Order(1)
+    void askingForPasswordResetCodesSharesTheStrictLoginBucket() {
+        List<Integer> codes = new ArrayList<>();
+        for (int i = 0; i < 15; i++) {
+            codes.add(client.post().uri("/api/v1/auth/password/forgot").contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"email\":\"x@x.com\"}").exchange().expectBody(String.class).returnResult().getStatus().value());
+        }
+        assertThat(codes).as("al agotar el cubo de 5 responde 429: no se pueden pedir códigos sin límite").contains(429);
+        assertThat(codes.subList(0, 5)).doesNotContain(429);
+    }
+
+    @Test
     @Order(2)
     void the429HasTheNormalizedJsonRetryAfterAndRateLimitHeaders() {
         EntityExchangeResult<String> limited = null;
