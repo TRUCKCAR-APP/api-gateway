@@ -54,12 +54,13 @@ por IP del cliente en Redis, compartido por todas las réplicas.
 |---|---|---|
 | `POST /api/v1/auth/login` y `/api/v1/auth/2fa/verify-login` (`user-identity-login-route`) | 1 intento/s, ráfaga de 5 | `TRUCKCAR_RATE_LIMIT_LOGIN_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_LOGIN_BURST_CAPACITY` |
 | `/api/v1/auth/register`, `/refresh` y `/2fa/setup`, `/2fa/verify-setup`, `/2fa/disable` (`user-identity-auth-route`) | 5/s, ráfaga de 10 | `TRUCKCAR_RATE_LIMIT_AUTH_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_AUTH_BURST_CAPACITY` |
+| `/api/v1/assistant/**` (`voice-ai-assistant-route`, exige JWT; cada petición es una llamada a Azure OpenAI) | 1/s, ráfaga de 10 | `TRUCKCAR_RATE_LIMIT_ASSISTANT_REPLENISH_RATE`, `TRUCKCAR_RATE_LIMIT_ASSISTANT_BURST_CAPACITY` |
+| Resto de `/api/v1/auth/**`, `/api/v1/users/**` y `/api/v1/companies/**` | sin límite | — |
 
 **Doble autenticación:**
 - `/api/v1/auth/2fa/setup`, `/verify-setup` y `/disable` exigen un access token completo, aunque estén bajo `/auth`.
 - `/2fa/verify-login` es público: lo autoriza el token temporal en User-Identity.
 - Un JWT con `scope` (el token temporal `2FA_PENDING` del segundo paso) nunca se acepta como sesión.
-| Resto de `/api/v1/auth/**`, `/api/v1/users/**` y `/api/v1/companies/**` | sin límite | — |
 
 - **Respuesta:** `429` con el JSON de errores (`"message":"Demasiados intentos, espere unos segundos"`), `Retry-After` y
   `X-RateLimit-Remaining`, `-Replenish-Rate`, `-Burst-Capacity` y `-Requested-Tokens`, expuestas por CORS para la PWA.
@@ -85,7 +86,7 @@ Prueba: `RateLimitRouteTest` (Redis real con Testcontainers; requiere Docker).
 | `TRUCKCAR_GATEWAY_TRUSTED_SOURCE_CIDRS` | CIDR separados por coma desde los que se aceptan conexiones (en AWS, **las subredes del ALB**). Se compara la IP de la conexión TCP, nunca `X-Forwarded-For`. Cualquier otro origen recibe 403. Vacío = sin restricción (Docker/local). `/actuator/**` (puerto de gestión 8090) queda fuera para probes y Prometheus. |
 | `TRUCKCAR_RATE_LIMIT_TRUST_FORWARDED_FOR` | `true` detrás de un proxy (k8s): la IP del cliente sale de `X-Forwarded-For`. Por defecto `false` (la IP de la conexión). |
 | `TRUCKCAR_RATE_LIMIT_TRUSTED_PROXIES` | Proxies de confianza delante del gateway (por defecto 1). |
-| `TRUCKCAR_RATE_LIMIT_*_REPLENISH_RATE` / `_BURST_CAPACITY` | Límites de login y de register/refresh (ver arriba). |
+| `TRUCKCAR_RATE_LIMIT_*_REPLENISH_RATE` / `_BURST_CAPACITY` | Límites de login, de register/refresh y del asistente de voz (ver arriba). |
 | `SPRING_DATA_REDIS_TIMEOUT` | Timeout de los comandos a Redis (por defecto `2s`). |
 | `TRUCKCAR_*_URL` | URL de cada microservicio (ver `src/main/resources/application.yaml`). |
 

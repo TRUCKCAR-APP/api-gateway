@@ -142,6 +142,23 @@ spring:
             - RemoveRequestHeader=Origin
             - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
 
+        # Copiloto de voz: interpreta con IA las órdenes que las reglas del teléfono no entienden. Exige JWT (el servicio
+        # recibe X-Auth-User) y tiene su propio cubo por IP: cada petición es una llamada a Azure OpenAI.
+        - id: voice-ai-assistant-route
+          uri: ${TRUCKCAR_VOICE_AI_ASSISTANT_URL:http://localhost:8088}
+          predicates:
+            - Path=/api/v1/assistant/**
+          filters:
+            - RemoveRequestHeader=Origin
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${TRUCKCAR_RATE_LIMIT_ASSISTANT_REPLENISH_RATE:1}
+                redis-rate-limiter.burstCapacity: ${TRUCKCAR_RATE_LIMIT_ASSISTANT_BURST_CAPACITY:10}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@clientIpKeyResolver}"
+                deny-empty-key: true
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
+
         # Plantillas de notificación (solo ADMIN: JwtAuthenticationFilter responde 403 a otro rol y Notifications lo
         # vuelve a exigir con @PreAuthorize).
         - id: templates-route
